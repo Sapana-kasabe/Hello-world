@@ -91,13 +91,13 @@ labels=["18-29","30-39","40-49","50-59","60-69","70+"]
 df["Age_group"]=pd.cut(df["Age"],bins=bins,labels=labels) 
 print(df["Age_group"].value_counts())
 
-grp3=df.groupby("Age_group")["Income"].mean()
+grp3=df.groupby("Age_group", observed=False)["Income"].mean()
 grp3.plot(kind="bar",color="orange")
 plt.title("Average income by Age group")
 plt.ylabel("Income")
 plt.xticks(rotation=45)
-# plt.show()
-
+plt.show()
+plt.close()
 #group the features
 features=df[["Income","Recency","NumWebPurchases","NumCatalogPurchases","NumWebVisitsMonth","Total_spending"]]
 x=df[features.columns]
@@ -111,38 +111,45 @@ x_scaled=scaler.fit_transform(x)
 
 #clustering
 from sklearn.cluster import KMeans
-wcss = []
-for i in range(2,10):
-    kmeans=KMeans(n_clusters=i)
-    kmeans.fit(x_scaled)
-    wcss.append(kmeans.inertia_)
-#print(wcss)
-plt.plot(range(2,10),wcss,marker='o')
-plt.title("Elbow Method")
-plt.xlabel("Number of clusters")
-plt.ylabel("WCSS")
-plt.show()
+# --- STEP 1: Cluster and Export Dataset ---
+kmeans = KMeans(n_clusters=5, random_state=42)
+df["Cluster"] = kmeans.fit_predict(x_scaled)
 
-kmeans=KMeans(n_clusters=5)
-df["Cluster"]=kmeans.fit_predict(x_scaled)
-# print(df["Cluster"].value_counts())
-# print(df.head())
+# Export labeled dataset to CSV
+df.to_csv("segmented_customers.csv", index=False)
 
-#characteristics of clusters
-cluster_characteristics=df.groupby("Cluster")[features.columns].mean()
-#print(cluster_characteristics)
-
-#PCA for visualization
+# Optional: PCA Visualization (kept from your code)
 from sklearn.decomposition import PCA
-pca=PCA(n_components=2) 
-pca_data=pca.fit_transform(x_scaled)
-df["PCA1"],df["PCA2"]=pca_data[:,0],pca_data[:,1]
+pca = PCA(n_components=2)
+pca_data = pca.fit_transform(x_scaled)
+df["PCA1"], df["PCA2"] = pca_data[:, 0], pca_data[:, 1]
 
-# print(pca_data)
-sns.scatterplot(x="PCA1",y="PCA2",hue="Cluster",data=df,palette="Set1")
+sns.scatterplot(x="PCA1", y="PCA2", hue="Cluster", data=df, palette="Set1")
 plt.title("Customer Segmentation using KMeans Clustering")
 plt.show()
+plt.close()
 
+
+# --- STEPS 2 & 3: Train Classifier & Save Models ---
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
 import joblib
-joblib.dump(kmeans,"kmeans_model.pkl")
-joblib.dump(scaler,"scaler.pkl")
+
+# Prepare training data (using raw feature vectors + assigned cluster labels)
+X = df[features.columns]
+y = df["Cluster"]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Fit scaler on training set
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+
+# Train supervised classifier on feature-to-cluster mapping
+classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+classifier.fit(X_train_scaled, y_train)
+
+# Save classifier and scaler for Step 4 (Streamlit app)
+joblib.dump(classifier, "cluster_classifier.pkl")
+joblib.dump(scaler, "scaler.pkl")
+print("Saved segmented dataset, classifier, and scaler successfully!")
