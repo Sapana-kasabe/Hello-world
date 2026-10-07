@@ -1,39 +1,51 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import numpy as np
 
-kmeans=joblib.load("kmeans_model.pkl")
-scaler=joblib.load("scaler.pkl")
+# Load trained classifier and scaler
+classifier = joblib.load("cluster_classifier.pkl")
+scaler = joblib.load("scaler.pkl")
 
-st.title("Customer Segmentation App")
-st.write("Enter customer details to predict their segment.")
+# Dictionary mapping cluster numbers to descriptive business statements
+CLUSTER_LABELS = {
+    0: "Low Income / Low Spender (Budget Customer)",
+    1: "High Income / Big Spender (VIP Customer)",
+    2: "Average Income / Active Web Shopper",
+    3: "Low Income / Occasional Spender",
+    4: "High Income / High Wealth Outlier"
+}
 
-age=st.number_input("Age",min_value=18,max_value=100,value=35)
-income=st.number_input("Income",min_value=0,max_value=200000,value=50000)
-total_spending=st.number_input("Total_spending",min_value=0,max_value=5000,value=1000)
-num_web_purchases=st.number_input("Number of web purchases",min_value=0,max_value=100,value=10)
-num_store_purchases=st.number_input("Number of store purchases",min_value=0,max_value=100,value=10)
-num_web_visits=st.number_input("Number of web visits per month",min_value=0,max_value=50,value=3)
-recency=st.number_input("recency (days since last purchases)",min_value=0,max_value=365,value=30)
+st.title("Customer Segmentation Real-Time Prediction")
+st.write("Enter customer details to predict their cluster segment.")
 
-input_data=pd.DataFrame({
-    
-   
-    "Income":[income],
-    "Total_spending":[total_spending],
-    "NumWebPurchases":[num_web_purchases],
-    "NumStorePurchases":[num_store_purchases],
-    "NumWebVisitsMonth":[num_web_visits],
-    "Recency":[recency]
-})
-
-input_data.columns = scaler.feature_names_in_
-
-input_scaled=scaler.transform(input_data)
+# Input fields matching training features
+income = st.number_input("Income ($)", min_value=0, max_value=200000, value=50000)
+recency = st.number_input("Recency (Days since last purchase)", min_value=0, max_value=365, value=30)
+num_web_purchases = st.number_input("Number of Web Purchases", min_value=0, max_value=100, value=10)
+num_catalog_purchases = st.number_input("Number of Catalog Purchases", min_value=0, max_value=100, value=5)
+num_web_visits = st.number_input("Number of Web Visits per Month", min_value=0, max_value=50, value=3)
+total_spending = st.number_input("Total Spending ($)", min_value=0, max_value=10000, value=1000)
 
 if st.button("Predict Segment"):
-    cluster=kmeans.predict(input_scaled)[0]
+    # Construct input dataframe
+    input_df = pd.DataFrame([{
+        "Income": income,
+        "Recency": recency,
+        "NumWebPurchases": num_web_purchases,
+        "NumCatalogPurchases": num_catalog_purchases,
+        "NumWebVisitsMonth": num_web_visits,
+        "Total_spending": total_spending
+    }])
 
-    st.success(f"The predicted customer segment is: {cluster}")
-  
+    # Scale the input
+    input_scaled = scaler.transform(input_df)
+
+    # Predict numeric cluster ID
+    predicted_cluster = classifier.predict(input_scaled)[0]
+    
+    # Map cluster ID to descriptive label
+    segment_statement = CLUSTER_LABELS.get(predicted_cluster, "Unknown Segment")
+
+    # Display result
+    st.success(f"**Predicted Segment:** {segment_statement}")
+    st.info(f"**Cluster ID:** Cluster {predicted_cluster}")
